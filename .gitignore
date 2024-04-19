@@ -1,0 +1,16 @@
+*.exe
+*.exp
+*.lib
+*.ilk
+*.pdb
+las_file.obj  
+main.obj  
+metric.obj  
+quat.obj
+obj_file.obj
+*.res
+*.filters
+*.user
+vsproj
+obj_files/color_foot
+las_files
