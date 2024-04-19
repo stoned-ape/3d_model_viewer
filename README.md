@@ -37,7 +37,7 @@
 
 ### Wireframe mode
 
-![img](imgs/wireframe.png)
+![img](imgs/wire_frame.png)
 
 ### Vertex point cloud mode
 
