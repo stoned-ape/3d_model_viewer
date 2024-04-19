@@ -29,7 +29,7 @@
 
 ### Color with texture coordinates
 
-![img](imgs/color_txcds.png)
+![img](imgs/color_txdcs.png)
 
 ### Color with normal vectors
 
