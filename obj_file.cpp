@@ -437,15 +437,15 @@ void glTexCoord(float2 v){
 }
 
 void draw_obj_file(obj_file *of,geo_mode_e gm,col_mode_e cm){
-	float s=0;
-	for(int i=0;i<3;i++){
-		s=glm::max(s,glm::abs(of->box[1][i]-of->box[0][i]));
-	}
+	// float s=0;
+	// for(int i=0;i<3;i++){
+	// 	s=glm::max(s,glm::abs(of->box[1][i]-of->box[0][i]));
+	// }
 	glPushMatrix();
-	glRotatef(-90,1,0,0);
-	glRotatef(90,0,0,1);
-	glTranslate(-(of->box[0]+of->box[1])/2.0f/s);
-	glScalef(1/s,1/s,1/s);
+	// glRotatef(-90,1,0,0);
+	// glRotatef(90,0,0,1);
+	// glTranslate(-(of->box[0]+of->box[1])/2.0f/s);
+	// glScalef(1/s,1/s,1/s);
 	glColor3f(0,1,1);
 
 	if(gm==GM_VERTS){

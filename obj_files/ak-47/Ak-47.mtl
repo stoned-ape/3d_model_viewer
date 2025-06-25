@@ -4,6 +4,7 @@ newmtl m2
 	Kd 1.0000 1.0000 1.0000
 	Ks 0.00 0.00 0.00
 	map_Kd ak-47-round.bmp
+	map_Ka ak-47-round.bmp
 
 newmtl m1
 	illum 2
@@ -11,7 +12,7 @@ newmtl m1
 	Kd 1.0000 1.0000 1.0000
 	Ks 0.00 0.00 0.00
 	map_Kd ak-47.bmp
-
+	map_Ka ak-47.bmp
 
 
 

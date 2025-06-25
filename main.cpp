@@ -8,6 +8,56 @@
 #include <shlwapi.h>
 
 
+void make_bmp(const wchar_t *file_name,int width,int height,void *pixels){
+    __pragma(pack(push,1)) struct bmp_header{
+        uint16_t magic; //0x4d42
+        uint32_t file_size;
+        uint32_t app; //0
+        uint32_t offset; //54
+        uint32_t info_size; //40
+        int32_t width;
+        int32_t height;
+        uint16_t planes; //1
+        uint16_t bits_per_pix; //32 (four bytes)
+        uint32_t comp; //0
+        uint32_t comp_size; //size in bytes of the pixel buffer (w*h*4)
+        uint32_t xres; //0
+        uint32_t yres; //0
+        uint32_t cols_used; //0
+        uint32_t imp_cols; //0
+    }__pragma(pack(pop,1));
+
+    static_assert(sizeof(bmp_header)==54,"");
+
+    bmp_header head={0};
+    head.magic=0x4d42;
+    head.app=0;
+    head.offset=sizeof(bmp_header);
+    head.info_size=40;
+    head.width=width;
+    head.height=height;
+    head.planes=1;
+    head.bits_per_pix=32;
+    head.comp_size=width*height*head.bits_per_pix/8;
+    head.file_size=sizeof(bmp_header)+head.comp_size;
+
+    auto ptr=(uint8_t*)pixels;
+    for(int i=0;i<width*height;i++){
+        uint8_t tmp=ptr[4*i+0];
+        ptr[4*i+0]=ptr[4*i+2];
+        ptr[4*i+2]=tmp;
+    }
+
+    HANDLE bmp=CreateFileW(file_name,GENERIC_WRITE,0,0,CREATE_ALWAYS,0,0);
+    assert(bmp!=INVALID_HANDLE_VALUE);
+    unsigned long m;
+    assert(WriteFile(bmp,&head,sizeof head,&m,0));
+    assert(m==sizeof(bmp_header));
+    assert(WriteFile(bmp,pixels,head.comp_size,&m,0));
+    assert(m==head.comp_size);
+    CloseHandle(bmp);
+}
+
 
 struct dialog_event_handler:IFileDialogEvents,IFileDialogControlEvents{
     // IUnknown methods
@@ -146,6 +196,8 @@ struct state_t{
     float4x4 mvm;
     float4x4 inv;
     float3 origin;
+    bool will_save_bmp;
+    bool ortho;
 }state={
     .left_mouse_down=0,
     .right_mouse_down=false,
@@ -159,10 +211,16 @@ struct state_t{
     .ps=1,
     .lw=1,
     .origin=float3(0),
+    .will_save_bmp=false,
+    .ortho=false,
 };
 
-bool load_new_file(bool first){
-    const wchar_t *fname=get_file_from_user();
+bool load_new_file(bool first,const wchar_t *fname){
+    bool dealloc=false;
+    if(fname==NULL){ 
+        fname=get_file_from_user();
+        dealloc=true;
+    }
     if(fname==NULL) return false;
     if(!first){
         if(state.is_obj) destroy_obj_file(&state.of);
@@ -175,7 +233,7 @@ bool load_new_file(bool first){
     if(state.is_obj) create_obj_file(&state.of,fname);
     else             create_las_file(&state.lf,fname);
     SetWindowTextW(state.hwnd,fname);
-    CoTaskMemFree((void*)fname);
+    if(dealloc) CoTaskMemFree((void*)fname);
     return true;
 }
 
@@ -216,7 +274,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT message,WPARAM wparam,LPARAM lparam){
             case 3: state.cm=CM_NORMS;break;
             case 4: state.cm=CM_TXCDS;break;
             case 5: state.cm=CM_TEXTS;break;
-            case 6: load_new_file(false);break;
+            case 6: load_new_file(false,NULL);break;
             case 7: 
                 state.ps=glm::clamp(state.ps+1,1,10);
                 label_printf(state.ps_hwnd,"   %d",state.ps);
@@ -238,6 +296,9 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT message,WPARAM wparam,LPARAM lparam){
             case 13: state.origin+=m4v3(state.inv,float3(+.1,0,0),0);break;
             case 14: state.origin+=m4v3(state.inv,float3(0,-.1,0),0);break;
             case 15: state.origin=float3(0,0,0);break;
+            case 16: state.will_save_bmp=true;break;
+            case 17: state.ortho=true;break;
+            case 18: state.ortho=false;break;
             }
             break;
         }
@@ -462,6 +523,25 @@ int WINAPI WinMain(HINSTANCE hi,HINSTANCE hpi,char *args,int winshow){
         hwnd,(HMENU)(button_id++),GetModuleHandle(NULL),NULL                        
     );
 
+    CreateWindowExA(
+        0,"BUTTON","take picture",WS_CHILD|WS_VISIBLE,
+        760,height+10, 200, 30,          
+        hwnd,(HMENU)(button_id++),GetModuleHandle(NULL),NULL
+    );
+
+    for(int i=1;i<3;i++){
+        const char *mode_names[2]={"orthographic","perspective"};
+        CreateWindowExA(
+            0,"BUTTON",mode_names[i-1],
+            WS_CHILD|WS_VISIBLE|BS_AUTORADIOBUTTON,
+            760, height+10+i*40, 200, 30,
+            hwnd,
+            (HMENU)(button_id++),
+            GetModuleHandle(NULL),
+            NULL
+        );
+    }
+
     
 
     PIXELFORMATDESCRIPTOR pfd={0};
@@ -490,7 +570,7 @@ int WINAPI WinMain(HINSTANCE hi,HINSTANCE hpi,char *args,int winshow){
     // create_obj_file(&state.of,L"objs\\cat\\12221_Cat_v1_l3.obj");
     // create_obj_file(&state.of,L"objs\\color_foot\\color_foot.obj");
 
-    if(!load_new_file(true)) return 0;
+    if(!load_new_file(true,L"obj_files\\doge\\untitled.obj")) return 0;
     ShowWindow(hwnd,SW_NORMAL);
     
 
@@ -508,6 +588,7 @@ int WINAPI WinMain(HINSTANCE hi,HINSTANCE hpi,char *args,int winshow){
         }
         if(!running) break;
 
+        // bool ortho=0;
 
         POINT mouse_pos;
         GetCursorPos(&mouse_pos);
@@ -520,30 +601,66 @@ int WINAPI WinMain(HINSTANCE hi,HINSTANCE hpi,char *args,int winshow){
         long ypos=mouse_pos.y-irect.top;
         const float aspect=height/(float)width;
         state.mouse_vec=float3( map((float)xpos,0,width ,-1,+1),
-                                map((float)ypos,0,height,+1,-1),-.1);
+                                map((float)ypos,0,height,+1,-1),state.ortho?-.1:-1);
         state.pan_mouse_vec=state.mouse_vec;
 
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
         glViewport(0,0,width,height);
+
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+
+
         glPointSize(state.ps);
         glLineWidth(state.lw);
-        glPushMatrix();
-        
-        glScalef(1,1,.1);
-        glScalef(aspect,1,1);
+
+        float hfov;
+        float vfov;
+        if(!state.ortho){
+            glMatrixMode(GL_PROJECTION);
+            float sc=.1;
+            float n=3;
+            float r=1/aspect;
+            float t=1;
+            hfov=2*atan2(r,n);
+            vfov=2*atan2(t,n);
+            glFrustum(-r*sc,r*sc,-t*sc,t*sc,n*sc,10);
+            glMatrixMode(GL_MODELVIEW);
+
+            glTranslatef(0,0,-2);
+        }else{
+            glScalef(1,1,.1);
+            glScalef(aspect,1,-1);
+        }
+
+
 
         float4x4 mvm;
         glGetFloatv(GL_MODELVIEW_MATRIX,&mvm[0][0]);
         mvm=glm::inverse(mvm);
 
-        state.mouse_vec=m4v3(mvm,state.mouse_vec,1);
+        float4x4 prm;
+        glGetFloatv(GL_PROJECTION_MATRIX,&prm[0][0]);
+        prm=glm::inverse(prm);
 
-        //state.mouse_vec-=m4v3(mvm,state.origin*0.0f,1);
+        if(state.ortho){
+            state.mouse_vec=m4v3(mvm,state.mouse_vec,1);
+        }else{
+            float4 a=(mvm*prm)*float4(state.mouse_vec,1);
+            state.mouse_vec=a.xyz()/a.w;
+            state.mouse_vec+=3.0f*(state.mouse_vec-float3(0,0,2));
+        }
+
+
 
         //glColor3f(1,0,1);
-        //draw_float3(state.mouse_vec);
-        //draw_float3(state.base_mouse_vec);
+        // draw_float3(state.mouse_vec);
+        // draw_float3(state.base_mouse_vec);
+
+        
 
 
         _quat q=state.cam_q;
@@ -576,8 +693,23 @@ int WINAPI WinMain(HINSTANCE hi,HINSTANCE hpi,char *args,int winshow){
         glTranslate(panned_origin);
 
 
-        if(state.is_obj) draw_obj_file(&state.of,state.gm,state.cm);
-        else{
+        if(state.is_obj){
+            float s=0;
+            for(int i=0;i<3;i++){
+                s=glm::max(s,glm::abs(state.of.box[1][i]-state.of.box[0][i]));
+            }
+            glPushMatrix();
+            glTranslate(-(state.of.box[0]+state.of.box[1])/2.0f/s);
+            glScalef(1/s,1/s,1/s);
+            glColor3f(0,1,1);
+            draw_obj_file(&state.of,state.gm,state.cm);
+
+
+            glGetFloatv(GL_MODELVIEW_MATRIX,&mvm[0][0]);
+            glGetFloatv(GL_PROJECTION_MATRIX,&prm[0][0]);
+
+            glPopMatrix();
+        }else{
             glPushMatrix();
             const float3 c=(state.lf.box[1]+state.lf.box[0])/2.0f;
             const float3 s=(state.lf.box[1]-state.lf.box[0]);
@@ -592,7 +724,50 @@ int WINAPI WinMain(HINSTANCE hi,HINSTANCE hpi,char *args,int winshow){
             glPopMatrix();
         } 
 
+        glMatrixMode(GL_PROJECTION);
         glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
+        glPopMatrix();
+
+        if(state.will_save_bmp){
+            void *ptr=malloc(width*height*4);
+            assert(ptr);
+            
+            glReadPixels(0,0,width,height,GL_RGBA,GL_UNSIGNED_BYTE,ptr);
+
+            // static wchar_t buf[MAX_PATH];
+            // swprintf(buf,MAX_PATH,L"%s\\render%d.bmp",state.save_dir,i);
+
+            make_bmp(L"render.bmp",width,height,ptr);
+
+            FILE *f=fopen("render_params.txt","w");
+            assert(f);
+            // FILE *tmp=stdout;
+            // stdout=f;
+
+            global_file_star=f;
+            lprintln(width);
+            lprintln(height);
+            lprintln(hfov*180/pi);
+            lprintln(vfov*180/pi);
+            println();
+            println("projection_matrix:");
+            println(prm);
+            println("model_view_matrix:");
+            println(mvm);
+            global_file_star=stdout;
+
+
+
+            // stdout=tmp;
+            fclose(f);
+
+            free(ptr);
+
+            state.will_save_bmp=false;
+        }
+
+        // glPopMatrix();
         GL_CHECK();
         SwapBuffers(hdc);
     }    

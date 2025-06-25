@@ -56,8 +56,11 @@ int print(T arg,TV ...vargs){
     int x=print<T>(arg);
     return x+print(vargs...);
 }
+
+static FILE *global_file_star=stdout;
+
 #define PRINT_BASIC_RAW(type,format) \
-    template<> int print<type>(type arg){return printf(format,arg);}
+    template<> int print<type>(type arg){return fprintf(global_file_star,format,arg);}
 #define PRINT_BASIC(type,format) \
     PRINT_BASIC_RAW(type,format) \
     PRINT_BASIC_RAW(type*,"%p ") \
@@ -125,7 +128,7 @@ template<> int print<float4x4>(float4x4 m){
     int x=0;
     x+=println('[',cols[0],',');
     x+=println(' ',cols[1],',');
-    x+=println(' ',cols[2],']');
+    x+=println(' ',cols[2],',');
     x+=println(' ',cols[3],']');
     return x;
 }
