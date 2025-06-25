@@ -29,7 +29,7 @@
 
 ### Color with texture coordinates
 
-![img](imgs/color_txcds.png)
+![img](imgs/color_txdcs.png)
 
 ### Color with normal vectors
 
@@ -37,7 +37,7 @@
 
 ### Wireframe mode
 
-![img](imgs/wireframe.png)
+![img](imgs/wire_frame.png)
 
 ### Vertex point cloud mode
 
